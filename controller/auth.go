@@ -357,6 +357,7 @@ func GetUserByID (w http.ResponseWriter, r *http.Request){
 	}
 
 	var user models.User
+	// Hello
 
 	err = database.UserCollection.FindOne(ctx, bson.M{
 		"_id": userID,
