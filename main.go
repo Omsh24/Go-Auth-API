@@ -15,11 +15,13 @@ func main() {
 		log.Println("No .env file found")
 	}
 
+	// connecting the databse
 	database.ConnectDB()
 
+	// connecting the router
 	r := router.Router()
 
+	// verifying that the server has started
 	log.Println("Server is getting started")
 	log.Fatal(http.ListenAndServe(":9000", r))
-
 }
