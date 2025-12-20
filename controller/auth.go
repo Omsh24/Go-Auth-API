@@ -40,6 +40,39 @@ func init() {
 
 // PUBLIC ROUTES
 
+func DefaultPath(w http.ResponseWriter, r *http.Request){
+	fmt.Fprintln(w, `
+        <html>
+            <head>
+                <title>MyDex</title>
+                <style>
+                    body {
+                        background-color: #4cff4cff;
+                        font-family: Arial, sans-serif;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        height: 100vh;
+                    }
+                    .box {
+                        padding: 20px 30px;
+                        background: white;
+                        border-radius: 8px;
+                        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+                        font-size: 22px;
+                        color: #070707ff;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="box">
+                    The Server has been run successfully!
+                </div>
+            </body>
+        </html>
+    `)
+}
+
 // Signup functionalities
 func createUser(ctx context.Context, name string, email string, password string) (*models.User, error) {
 	// user validation checks

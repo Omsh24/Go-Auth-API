@@ -11,6 +11,8 @@ import (
 func Router() *mux.Router {
 	router := mux.NewRouter()
 
+	router.HandleFunc("/", controller.DefaultPath)
+
 	// public routes
 	// handle func takes in a path and a function to lead to when gone on that path
 	router.HandleFunc("/api/signup", controller.Signup).Methods("POST")
