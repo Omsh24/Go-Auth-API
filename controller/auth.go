@@ -27,6 +27,12 @@ import (
 
 var jwtSecret []byte
 
+type Claims struct {
+	UserID string `json:"sub"`
+	Email  string `json:"email"`
+	jwt.StandardClaims
+}
+
 func init() {
 	if err := godotenv.Load(); err != nil {
 		log.Fatal(err)
@@ -40,7 +46,7 @@ func init() {
 
 // PUBLIC ROUTES
 
-func DefaultPath(w http.ResponseWriter, r *http.Request){
+func DefaultPath(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintln(w, `
         <html>
             <head>
@@ -109,6 +115,7 @@ func createUser(ctx context.Context, name string, email string, password string)
 		Name:         name,
 		Email:        email,
 		PasswordHash: hashed,
+		Mydex:        []models.MyDex{},
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 	}
@@ -168,19 +175,30 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// clearing up the old cookie if any
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_token",
+		Value:    "", // changed from token in "" -> to remove the token
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Unix(0, 0), // kills immediately
+		MaxAge:   -1,
+	})
+
 	// sets up a session for user of 24 hours
 	http.SetCookie(w, &http.Cookie{
 		Name:     "auth_token",
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Now().Add(24 * time.Hour),
 	})
-
 	// making a json to show that the user signup was successful
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"id":    user.ID.Hex(),
 		"name":  user.Name,
 		"email": user.Email,
@@ -205,11 +223,13 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	var loginTemplate models.LoginTemplate
+	// checking if the request body is similar to the loginTemplate body
 	if err := json.NewDecoder(r.Body).Decode(&loginTemplate); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
 
+	// providing time based context for furthur operations
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
@@ -234,19 +254,32 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// clearing up the old cookie if any
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth_token",
+		Value:    "", // changed from token in "" -> to remove the token
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
+		Expires:  time.Unix(0, 0), // kills immediately
+		MaxAge:   -1,
+	})
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     "auth_token",
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		Secure:   false, // MUST be false on localhost
+		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Now().Add(24 * time.Hour),
 	})
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"message": "login successful",
 		"token":   token,
+		"id":      user.ID.Hex(),
 	})
 }
 
@@ -258,8 +291,8 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 		Value:    "", // changed from token in "" -> to remove the token
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		Secure:   false,
+		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Unix(0, 0), // kills immediately
 		MaxAge:   -1,
 	})
@@ -302,7 +335,7 @@ func Home(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			http.Error(w, "User not found", http.StatusNotFound)
 			return
-		}	// else
+		} // else
 		log.Printf("error fetching the users %v", err)
 		http.Error(w, "internal Server error", http.StatusInternalServerError)
 		return
@@ -328,7 +361,7 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 	cur, err := database.UserCollection.Find(ctx, bson.M{})
 	if err != nil {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
-        return
+		return
 	}
 	defer cur.Close(ctx)
 
@@ -338,7 +371,7 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 	// 	var u models.User
 	// 	if err := cur.Decode(&u); err != nil {
 	// 		http.Error(w, "internal server error", http.StatusInternalServerError)
-    //     	return
+	//     	return
 	// 	}
 
 	// 	users = append(users, map[string]any{
@@ -356,21 +389,20 @@ func GetAllUsers(w http.ResponseWriter, r *http.Request) {
 		var u models.User
 		if err := cur.Decode(&u); err != nil {
 			http.Error(w, "internal server error", http.StatusInternalServerError)
-        	return
+			return
 		}
 		users = append(users, u)
 	}
 
-
 	if err := cur.Err(); err != nil {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
-        return
+		return
 	}
 
 	json.NewEncoder(w).Encode(users)
 }
 
-func GetUserByID (w http.ResponseWriter, r *http.Request){
+func GetUserByID(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
@@ -380,13 +412,13 @@ func GetUserByID (w http.ResponseWriter, r *http.Request){
 	strID := params["id"]
 	if strID == "" {
 		http.Error(w, "missing user ID in params", http.StatusBadRequest)
-        return
+		return
 	}
 
 	userID, err := primitive.ObjectIDFromHex(strID)
 	if err != nil {
 		http.Error(w, "error converting user ID", http.StatusBadRequest)
-        return
+		return
 	}
 
 	var user models.User
@@ -396,8 +428,87 @@ func GetUserByID (w http.ResponseWriter, r *http.Request){
 	}).Decode(&user)
 	if err != nil {
 		http.Error(w, "user not found", http.StatusBadRequest)
-        return
+		return
 	}
 
 	json.NewEncoder(w).Encode(user)
+}
+
+func verifyJWT(tokenString string) (*Claims, error) {
+	token, err := jwt.ParseWithClaims(
+		tokenString,
+		&Claims{},
+		func(token *jwt.Token) (any, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method (nhi pta)")
+			}
+			return jwtSecret, nil
+		},
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	claims, ok := token.Claims.(*Claims)
+	if !ok || !token.Valid {
+		return nil, errors.New("invalid token")
+	}
+
+	return claims, nil
+}
+
+func GetCurrentUser(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Getting the cookie that we stored earlier
+	cookie, err := r.Cookie("auth_token")
+	if err != nil {
+		http.Error(w, "no cookie found / unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// verify the token present in the cookie
+	fmt.Println("here is the cookie value ", cookie.Value)
+	claims, err := verifyJWT(cookie.Value)
+	if err != nil {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	// convert the userID from string to primitive.ObjectID
+	userID, err := primitive.ObjectIDFromHex(claims.UserID)
+	if err != nil {
+		http.Error(w, "invalid user id", http.StatusUnauthorized)
+		return
+	}
+
+	// fetching the user from the database
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	var user models.User
+	err = database.UserCollection.FindOne(ctx, bson.M{
+		"_id": userID,
+	}).Decode(&user)
+
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			http.Error(w, "user not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// 5. Respond
+	json.NewEncoder(w).Encode(map[string]any{
+		"user": map[string]any{
+			"_id":       user.ID.Hex(),
+			"name":      user.Name,
+			"email":     user.Email,
+			"createdAt": user.CreatedAt, // if exists in model
+			"mydex": user.Mydex,
+		},
+	})
 }

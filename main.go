@@ -7,6 +7,7 @@ import (
 
 	"github.com/Omsh24/pokedexSLice/database"
 	"github.com/Omsh24/pokedexSLice/router"
+	"github.com/gorilla/handlers"
 	"github.com/joho/godotenv"
 )
 
@@ -16,13 +17,26 @@ func main() {
 		log.Println("No .env file found")
 	}
 
-	
-
 	// connecting the databse
 	database.ConnectDB()
 
 	// connecting the router
 	r := router.Router()
+
+	cors := handlers.CORS(
+		handlers.AllowedOrigins([]string{
+			"http://localhost:5173",
+		}),
+		handlers.AllowedMethods([]string{
+			"GET", "POST", "PUT", "DELETE", "OPTIONS",
+		}),
+		handlers.AllowedHeaders([]string{
+			"Content-Type", "Authorization",
+		}),
+		handlers.AllowCredentials(),
+	)
+
+
 
 	// verifying that the server has started, also implementing PORT from .env
 	port := os.Getenv("PORT")
@@ -32,5 +46,5 @@ func main() {
 
 	log.Println("Server is getting started at", port)
 	portRoute := ":" + port
-	log.Fatal(http.ListenAndServe(portRoute, r))
+	log.Fatal(http.ListenAndServe(portRoute, cors(r)))
 }

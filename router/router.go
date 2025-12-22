@@ -20,6 +20,7 @@ func Router() *mux.Router {
 	router.HandleFunc("/api/logout", controller.Logout).Methods("GET")
 	router.HandleFunc("/api/users", controller.GetAllUsers).Methods("GET")
 	router.HandleFunc("/api/user/{id}", controller.GetUserByID).Methods("GET")
+	router.HandleFunc("/api/me", controller.GetCurrentUser).Methods("GET")
 
 	// private routes -> require authentication 
 	// Handle takes in a path and a handler (not a func)
@@ -28,6 +29,8 @@ func Router() *mux.Router {
 		// authentication function takes in a http.handler and returns a http.handler
 		middleware.Authenticator(http.HandlerFunc(controller.Home)),
 	).Methods("GET")
+
+	
 
 	return router
 }
