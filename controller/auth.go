@@ -344,7 +344,7 @@ func Home(w http.ResponseWriter, r *http.Request) {
 	// fmt.Println("r body", r.Body)
 	// fmt.Println("r context", r.Context())
 
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"userId": userID,
 		"user":   user,
 	})
@@ -508,7 +508,61 @@ func GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 			"name":      user.Name,
 			"email":     user.Email,
 			"createdAt": user.CreatedAt, // if exists in model
-			"mydex": user.Mydex,
+			"mydex":     user.Mydex,
 		},
+	})
+}
+
+func UpdateMyDex(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	userID, ok := middleware.GetUserFromContext(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+
+	// converting the user ID from string (hex) to primitive.ObjectID
+	hexUserID, err := primitive.ObjectIDFromHex(userID)
+	if err != nil {
+		http.Error(w, "Cann't find the user", http.StatusUnauthorized)
+		return
+	}
+	fmt.Println(hexUserID)
+
+	var pokeModel models.MyDex
+	if err := json.NewDecoder(r.Body).Decode(&pokeModel); err != nil {
+		http.Error(w, "invalid poke request body", http.StatusBadRequest)
+		return
+	}
+
+	filter := bson.M{
+		"_id": hexUserID,
+		"mydex.pokemonName": bson.M{"$ne": pokeModel.PokemonName},
+	}
+
+	update := bson.M{
+		"$push": bson.M{"mydex": pokeModel},
+		"$set": bson.M{"updatedAt": time.Now()},
+	}
+
+	res, err := database.UserCollection.UpdateOne(ctx, filter, update)
+
+	if err != nil {
+		http.Error(w, "Failed to update mydex", http.StatusInternalServerError)
+		return
+	}
+
+	if res.ModifiedCount == 0 {
+		http.Error(w, "pokemon already exists in mydex", http.StatusConflict)
+		return
+	}
+
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "pokemon added to mydex",
 	})
 }

@@ -21,7 +21,7 @@ func Router() *mux.Router {
 	router.HandleFunc("/api/users", controller.GetAllUsers).Methods("GET")
 	router.HandleFunc("/api/user/{id}", controller.GetUserByID).Methods("GET")
 	router.HandleFunc("/api/me", controller.GetCurrentUser).Methods("GET")
-
+	
 	// private routes -> require authentication 
 	// Handle takes in a path and a handler (not a func)
 	router.Handle(
@@ -29,6 +29,12 @@ func Router() *mux.Router {
 		// authentication function takes in a http.handler and returns a http.handler
 		middleware.Authenticator(http.HandlerFunc(controller.Home)),
 	).Methods("GET")
+
+	router.Handle(
+		"/api/updateMyDex",
+		// authentication function takes in a http.handler and returns a http.handler
+		middleware.Authenticator(http.HandlerFunc(controller.UpdateMyDex)),
+	).Methods("POST")
 
 	
 
